@@ -4,6 +4,7 @@ namespace App\Filament\Resources\News\Schemas;
 
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 
 class NewsForm
@@ -11,6 +12,8 @@ class NewsForm
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
+            Toggle::make('sync_now')->label('同步到圓夢網')->default(false)->dehydrated(false)
+                ->helperText('開啟後，儲存時會將這則消息同步到圓夢網。')->columnSpanFull(),
             TextInput::make('title')->label('標題')->required()->maxLength(255)->columnSpanFull(),
             Select::make('type')->label('分類')->options([
                 '新聞快訊' => '新聞快訊',

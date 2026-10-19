@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\News\NewsResource;
 use App\Filament\Resources\News\Pages\CreateNews;
 use App\Filament\Resources\News\Pages\EditNews;
 use App\Filament\Resources\News\Pages\ListNews;
@@ -46,9 +47,36 @@ class NewsResourceTest extends TestCase
         $this->actingAs(User::factory()->create());
         Livewire::test(CreateNews::class)
             ->fillForm(['title' => '測試消息', 'type' => '公告', 'content' => 'example.com/news'])
-            ->call('create')->assertHasNoFormErrors();
+            ->call('create')->assertHasNoFormErrors()->assertRedirect(NewsResource::getUrl('index'));
         $this->assertDatabaseHas('news', ['title' => '測試消息', 'content' => 'https://example.com/news', 'order_column' => 1]);
         Http::assertNothingSent();
+    }
+
+    public function test_enabling_sync_sends_news_after_saving(): void
+    {
+        config(['services.startup_api' => ['startup_news_url' => 'https://example.com/news', 'startup_key_id' => 'key', 'startup_secret' => 'secret']]);
+        Http::preventStrayRequests();
+        Http::fake(['https://example.com/news/' => Http::response([], 201)]);
+        $this->actingAs(User::factory()->create());
+        Livewire::test(CreateNews::class)
+            ->fillForm(['title' => '同步消息', 'type' => '公告', 'content' => 'example.com/news', 'sync_now' => true])
+            ->call('create')->assertHasNoFormErrors()->assertRedirect(NewsResource::getUrl('index'));
+        $this->assertDatabaseHas('news', ['title' => '同步消息']);
+        Http::assertSentCount(1);
+    }
+
+    public function test_update_sync_failure_preserves_local_changes(): void
+    {
+        config(['services.startup_api' => ['startup_news_url' => 'https://example.com/news', 'startup_key_id' => 'key', 'startup_secret' => 'secret']]);
+        Http::preventStrayRequests();
+        Http::fake(['https://example.com/news/0000000001/' => Http::failedConnection()]);
+        $this->actingAs(User::factory()->create());
+        $news = News::create(['title' => '原標題', 'type' => '公告', 'content' => 'https://example.com']);
+        Livewire::test(EditNews::class, ['record' => $news->getRouteKey()])
+            ->fillForm(['title' => '新標題', 'sync_now' => true])
+            ->call('save')->assertHasNoFormErrors()->assertRedirect(NewsResource::getUrl('index'))
+            ->assertNotified('本機已儲存，但圓夢網同步失敗');
+        $this->assertDatabaseHas('news', ['id' => $news->id, 'title' => '新標題']);
     }
 
     public function test_invalid_news_is_not_saved(): void
@@ -68,7 +96,7 @@ class NewsResourceTest extends TestCase
         Livewire::test(ListNews::class)->assertCanSeeTableRecords([$news])->searchTable('不存在')->assertCanNotSeeTableRecords([$news]);
         Livewire::test(EditNews::class, ['record' => $news->getRouteKey()])
             ->fillForm(['title' => '更新消息', 'type' => '創業專欄', 'content' => 'https://example.com/new'])
-            ->call('save')->assertHasNoFormErrors();
+            ->call('save')->assertHasNoFormErrors()->assertRedirect(NewsResource::getUrl('index'));
         $this->assertDatabaseHas('news', ['id' => $news->id, 'title' => '更新消息', 'order_column' => 8]);
         Http::assertNothingSent();
     }

@@ -14,6 +14,12 @@ return [
     |
     */
 
+    'startup_api' => [
+        'startup_news_url' => env('API_NEWS_URL'),
+        'startup_key_id' => env('API_KEY_ID'),
+        'startup_secret' => env('API_SECRET'),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],
